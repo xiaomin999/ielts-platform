@@ -124,7 +124,13 @@
   .read-toolbar input[type=text]{flex:1;min-width:180px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:14px}
   .read-toolbar input[type=number]{width:60px;padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:14px}
   .read-toolbar .autoswitch{font-size:13.5px;color:var(--ink);display:inline-flex;align-items:center;gap:6px;padding:0 8px}
-  .rec-status{font-size:12px;color:var(--sub);margin-left:auto}
+  .lex-expand-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0 14px;padding:10px 12px;background:#fef9c3;border:1px dashed #facc15;border-radius:10px}
+.lex-target{font-size:13.5px;color:#854d0e}
+.lex-target b{color:#1f2937}
+.lex-unit{font-size:13px;color:var(--sub)}
+.lex-expand-hint{font-size:12px;color:#854d0e;flex-basis:100%}
+.lex-expand-bar input[type=text],.lex-expand-bar input[type=number]{padding:6px 10px;border:1px solid var(--line);border-radius:6px;font-size:13.5px;background:#fff}
+.lex-expand-bar input[type=number]{width:64px}
   .reader{display:none}
   .reader .text{font-size:16px;line-height:1.95;color:#2a3340;background:var(--bg);border-radius:14px;padding:20px 22px;margin:14px 0}
   .reader .text .word-hl{cursor:pointer;border-bottom:1px dotted var(--brand)}
@@ -450,7 +456,9 @@
           <button class="btn sm" id="lexUnmarkAll">本页全取消</button>
           <button class="btn ghost sm" id="lexExportBtn">导出 CSV</button>
         </div>
+        <input type="number" id="lexExpandN" style="display:none" value="30" />
       </div>
+      <div class="lex-expand-bar" id="lexExpandBar"></div>
       <div class="lex-summary" id="lexSummary"></div>
       <div class="lex-list" id="lexList"></div>
     </div>
@@ -1101,7 +1109,35 @@ function renderLex(){
   ];
   tabs.innerHTML=list.map(t=>`<button data-id="${t.id}" class="${t.id===lexBank?'active':''}">${t.label}<small>${t.n}</small></button>`).join('');
   tabs.querySelectorAll('button').forEach(b=>b.onclick=()=>{lexBank=b.dataset.id;renderLex();});
+  renderLexExpandBar();
   renderLexList();
+}
+function renderLexExpandBar(){
+  const bar=document.getElementById('lexExpandBar');
+  if(!bar)return;
+  const map={academic:'学术通用',kitchen:'厨房家电行业',career:'职场商务',medical:'医疗健康'};
+  if(map[lexBank]){
+    bar.innerHTML=`
+      <span class="lex-target">当前词库：<b>${map[lexBank]}</b></span>
+      <input type="number" id="lexExpandN" min="5" max="80" value="30" />
+      <span class="lex-unit">词</span>
+      <button class="btn" id="lexExpandBtn">➕ AI 联网扩充</button>
+      <button class="btn ghost" id="lexExpandSmartBtn">🎯 智能补盲</button>
+      <span class="lex-expand-hint">联网扩充：基于近年互联网/电商/外贸/职场流行语；智能补盲：自动找出你还没学的相邻高频词</span>`;
+    document.getElementById('lexExpandBtn').onclick=()=>expandBank(lexBank,+document.getElementById('lexExpandN').value||30);
+    document.getElementById('lexExpandSmartBtn').onclick=()=>expandBankSmart(lexBank);
+  } else if(lexBank==='custom'){
+    bar.innerHTML=`
+      <span class="lex-target">我的词库：</span>
+      <input type="text" id="lexAddInput" placeholder="单词 / 短语（自动查释义）" style="flex:1;min-width:160px"/>
+      <button class="btn" id="lexAddBtn">➕ 添加</button>
+      <button class="btn ghost" id="lexExpandBtn2">➕ AI 批量扩充</button>
+      <span class="lex-expand-hint">可手动逐词添加，或一次 AI 批量生成 30 词</span>`;
+    document.getElementById('lexAddBtn').onclick=lexAddSingle;
+    document.getElementById('lexExpandBtn2').onclick=()=>expandBank('custom',+document.getElementById('lexExpandN').value||30);
+  } else {
+    bar.innerHTML=`<span class="lex-expand-hint">切换到具体词库后可点击「➕ AI 联网扩充」或「🎯 智能补盲」自动增加词数</span>`;
+  }
 }
 function renderLexList(){
   const q=(document.getElementById('lexQ').value||'').toLowerCase().trim();
@@ -1150,6 +1186,82 @@ window.lexDelWord=(w)=>{
 };
 document.getElementById('lexQ').oninput=renderLexList;
 document.getElementById('lexFilter').onchange=renderLexList;
+
+function expandBank(bank,n){
+  if(!qwenReady())return;
+  n=Math.max(5,Math.min(80,n||30));
+  const map={academic:'学术通用英语（雅思核心词汇，涵盖教育/科技/环境/社会/文化/健康/经济）',kitchen:'厨房家电行业（含小家电、真空机/封口机/搅拌机/破壁机/咖啡机/电烤箱等品类）的产品研发与营销词汇',career:'职场商务英语（含会议、汇报、谈判、项目管理、求职面试、邮件沟通）',medical:'医疗健康英语（含就诊、问诊、药品、症状、医院科室、慢病管理）',custom:'厨房家电或日常英语'};
+  const existing=(bank==='custom'?state.customWords:BANKS[bank])||[];
+  const exclude=new Set(existing.map(w=>w.w.toLowerCase()));
+  const excludeList=Array.from(exclude).slice(0,50).join(', ');
+  const btn=document.getElementById('lexExpandBtn')||document.getElementById('lexExpandBtn2');
+  const oldLabel=btn?btn.textContent:'';
+  if(btn)setBusy(btn,true,'⏳ AI 生成中…');
+  const sys='你是英语词汇专家。只返回一个 JSON 数组，不要任何解释或 Markdown。元素格式：{"w":"英文单词（小写）","ipa":"/国际音标/","pos":"词性如 n./v./adj.","cn":"中文释义","ex":"一句英文例句","col":"常见搭配"}。要求：①严格去重（不要输出已列出的词）；②优先使用近 2–3 年互联网/电商/跨境电商/外贸/产品评测/职场等真实语境中的高频表达；③例句与搭配贴近真实生活或职场；④w 全部小写、纯英文（不要包含中文、空格、标点）。';
+  const user='请生成 '+n+' 个「'+target[bank]+'」高频实用英文单词，目标人群为中国成人英语学习者（雅思 5.5–7.0 水平）。**重要**：以下词已经在词库里，绝对不要重复输出（可绕开同义词但词形须不同）：'+excludeList+'。';
+  callQwen(sys,user,txt=>{
+    const arr=parseJSON(txt);
+    if(!Array.isArray(arr)||!arr.length){toast('解析失败：'+txt.slice(0,80));if(btn)setBusy(btn,false,oldLabel);return;}
+    const target=bank==='custom'?state.customWords:BANKS[bank];
+    const before=target.length;
+    arr.forEach(w=>{if(!w||!w.w)return;w.w=(w.w+'').toLowerCase().trim();if(!w.w||exclude.has(w.w))return;target.push(w);exclude.add(w.w);});
+    const added=target.length-before;
+    save();
+    if(btn)setBusy(btn,false,oldLabel);
+    toast('✅ 已扩充 '+added+' 词（请求 '+arr.length+'，去重后入库 '+added+'）');
+    renderLex();renderHome();renderStats();
+  },err=>{if(btn)setBusy(btn,false,oldLabel);toast('扩充失败：'+err);});
+}
+const target={academic:'学术通用英语（雅思核心词汇，涵盖教育/科技/环境/社会/文化/健康/经济）',kitchen:'厨房家电行业（含小家电、真空机/封口机/搅拌机/破壁机/咖啡机/电烤箱等品类）的产品研发与营销词汇',career:'职场商务英语（含会议、汇报、谈判、项目管理、求职面试、邮件沟通）',medical:'医疗健康英语（含就诊、问诊、药品、症状、医院科室、慢病管理）',custom:'厨房家电或日常英语'};
+
+function expandBankSmart(bank){
+  if(!qwenReady())return;
+  const existing=(bank==='custom'?state.customWords:BANKS[bank])||[];
+  if(!existing.length){toast('词库为空，请先用「AI 联网扩充」');return;}
+  const sample=existing.slice(0,40).map(w=>w.w+'('+w.cn+')').join('; ');
+  const btn=document.getElementById('lexExpandSmartBtn');
+  if(btn)setBusy(btn,true,'⏳ 智能补盲中…');
+  const n=30;
+  const sys='你是英语词汇专家。只返回一个 JSON 数组，不要任何解释或 Markdown。元素格式：{"w":"英文单词（小写）","ipa":"/国际音标/","pos":"词性","cn":"中文释义","ex":"一句英文例句","col":"常见搭配"}。';
+  const user='以下是该词库已收录的样本词（含中文释义）：'+sample+'。请基于此「词库画像」智能补全 30 个**未被收录、但属于同一词库体系的高频必备词**——优先：①同领域相邻词（如材料/参数/工艺/法规/竞品术语等）；②近 2–3 年新兴概念词；③同义词中较冷门但实用的。要求小写纯英文，不要与已有词重复。';
+  callQwen(sys,user,txt=>{
+    const arr=parseJSON(txt);
+    if(!Array.isArray(arr)||!arr.length){toast('解析失败：'+txt.slice(0,80));if(btn)setBusy(btn,false,'🎯 智能补盲');return;}
+    const exclude=new Set(existing.map(w=>w.w.toLowerCase()));
+    const target=bank==='custom'?state.customWords:BANKS[bank];
+    const before=target.length;
+    arr.forEach(w=>{if(!w||!w.w)return;w.w=(w.w+'').toLowerCase().trim();if(!w.w||exclude.has(w.w))return;target.push(w);exclude.add(w.w);});
+    const added=target.length-before;
+    save();
+    if(btn)setBusy(btn,false,'🎯 智能补盲');
+    toast('✅ 智能补盲入库 '+added+' 词');
+    renderLex();renderHome();renderStats();
+  },err=>{if(btn)setBusy(btn,false,'🎯 智能补盲');toast('失败：'+err);});
+}
+
+function lexAddSingle(){
+  const inp=document.getElementById('lexAddInput');
+  if(!inp)return;
+  const w=inp.value.trim();
+  if(!w){toast('请先输入单词');return;}
+  if(!qwenReady())return;
+  const btn=document.getElementById('lexAddBtn');
+  if(btn)setBusy(btn,true,'⏳ 查询…');
+  const sys='你是英语词典助手。只返回一个 JSON 对象：{"w":"小写单词","ipa":"/音标/","pos":"词性","cn":"中文释义","ex":"一句例句","col":"搭配"}。';
+  const user='请查单词「'+w+'」的音标、词性、中文释义、英文例句、常见搭配，并按 JSON 返回。注意：短语请把 w 拆为原样但小写。';
+  callQwen(sys,user,txt=>{
+    const obj=parseJSON(txt);
+    if(!obj||!obj.w){toast('解析失败：'+txt.slice(0,80));if(btn)setBusy(btn,false,'➕ 添加');return;}
+    obj.w=obj.w.toLowerCase().trim();
+    if(!state.customWords)state.customWords=[];
+    if(state.customWords.some(x=>x.w===obj.w)){toast('该词已在「我的词库」中');if(btn)setBusy(btn,false,'➕ 添加');return;}
+    state.customWords.push(obj);inp.value='';
+    save();
+    if(btn)setBusy(btn,false,'➕ 添加');
+    toast('✅ 已添加 '+obj.w);
+    renderLex();renderHome();renderStats();
+  },err=>{if(btn)setBusy(btn,false,'➕ 添加');toast('失败：'+err);});
+}
 document.getElementById('lexMarkAll').onclick=()=>{
   const arr=getLexWords().filter(w=>{
     const f=document.getElementById('lexFilter').value;const q=(document.getElementById('lexQ').value||'').toLowerCase().trim();
