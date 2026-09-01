@@ -137,6 +137,37 @@
 
   .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 22px;border-radius:12px;font-size:14px;opacity:0;pointer-events:none;transition:.3s;z-index:99}
   .toast.show{opacity:1}
+  /* Lex Query */
+  .lex-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0 12px}
+  .lex-tabs{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 320px}
+  .lex-tabs button{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;color:var(--ink)}
+  .lex-tabs button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .lex-tabs button small{opacity:.7;margin-left:4px}
+  .lex-search{display:flex;gap:8px;flex:1 1 280px}
+  .lex-search input,.lex-search select{flex:1;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-size:14px}
+  .lex-search select{max-width:130px;flex:0 0 130px}
+  .lex-actions{display:flex;gap:6px;flex-wrap:wrap}
+  .lex-summary{font-size:13.5px;color:var(--sub);margin-bottom:10px}
+  .lex-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;max-height:68vh;overflow:auto;padding-right:6px}
+  .lex-item{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+  .lex-item.mastered{border-color:#86efac;background:linear-gradient(180deg,#f0fdf4,var(--panel))}
+  .lex-item-top{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .lex-item-top .w{font-weight:600;font-size:16px;color:var(--ink)}
+  .lex-item-top .ipa{color:var(--sub);font-size:13px}
+  .lex-item-top .pos{color:var(--accent);font-size:12px}
+  .lex-item-top .spacer{flex:1}
+  .lex-item-top .badge{font-size:11px;padding:2px 8px;border-radius:999px;background:#dbeafe;color:#1e40af}
+  .lex-item-top .badge.mastered{background:#86efac;color:#166534}
+  .lex-item-top .badge.learning{background:#fde68a;color:#92400e}
+  .lex-cn{font-size:14px;color:var(--ink)}
+  .lex-ex{font-size:12.5px;color:var(--sub);font-style:italic;line-height:1.5}
+  .lex-col{font-size:12px;color:var(--accent);background:rgba(91,141,239,.08);padding:4px 8px;border-radius:6px;align-self:flex-start}
+  .lex-btns{display:flex;gap:6px;margin-top:6px}
+  .lex-btns button{padding:4px 10px;font-size:12px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+  .lex-btns button:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .lex-btns button.del:hover{background:#ef4444;border-color:#ef4444}
+  @media(max-width:760px){.lex-tabs button{padding:5px 9px;font-size:12px}}
+  .toast.show{opacity:1}
   .empty{text-align:center;color:var(--sub);padding:40px;font-size:14px}
   .donemsg{background:#f3fbf5;border:1px solid #bfe9cd;color:#1f8a48;border-radius:12px;padding:16px;text-align:center;font-size:14.5px}
   @media(max-width:760px){
@@ -194,6 +225,7 @@
     <button data-view="call"><span class="ico">📞</span>视频通话练习</button>
     <button data-view="methods"><span class="ico">💡</span>学习方法</button>
     <button data-view="stats"><span class="ico">📊</span>我的统计</button>
+    <button data-view="lex"><span class="ico">🔎</span>词库查询</button>
     <button data-view="ai"><span class="ico">🤖</span>通义千问 AI</button>
   </nav>
   <div class="side-foot">
@@ -379,6 +411,33 @@
       <h2>📅 近 14 天打卡</h2>
       <div id="calBox" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"></div>
       <button class="btn ghost sm" id="resetBtn" style="margin-top:16px">重置全部学习数据</button>
+    </div>
+  </section>
+
+  <!-- LEXICON QUERY (词库查询) -->
+  <section class="view" id="v-lex">
+    <div class="card">
+      <h2>🔎 词库查询 · 全行业</h2>
+      <div class="desc">按词库筛选、搜索、按掌握状态过滤，可批量标记掌握/重置，或单个删除。AI 在「通义千问」生成的行业词库会自动出现在「我的词库」里。</div>
+      <div class="lex-toolbar">
+        <div class="lex-tabs" id="lexTabs"></div>
+        <div class="lex-search">
+          <input id="lexQ" type="search" placeholder="搜索单词 / 释义 / 例句 / 搭配…" />
+          <select id="lexFilter">
+            <option value="all">全部</option>
+            <option value="new">未学</option>
+            <option value="learning">学习中</option>
+            <option value="mastered">已掌握</option>
+          </select>
+        </div>
+        <div class="lex-actions">
+          <button class="btn sm" id="lexMarkAll">本页全标掌握</button>
+          <button class="btn sm" id="lexUnmarkAll">本页全取消</button>
+          <button class="btn ghost sm" id="lexExportBtn">导出 CSV</button>
+        </div>
+      </div>
+      <div class="lex-summary" id="lexSummary"></div>
+      <div class="lex-list" id="lexList"></div>
     </div>
   </section>
 
@@ -749,10 +808,10 @@ function toast(m){const t=document.getElementById('toast');t.textContent=m;t.cla
 function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 
 /* ===================== 导航 ===================== */
-const titles={home:"今日学习计划",words:"每日单词",review:"间隔复习",shadow:"语句跟读",reading:"短文阅读",call:"视频通话练习",methods:"学习方法",stats:"我的统计",ai:"通义千问 AI 助手"};
+const titles={home:"今日学习计划",words:"每日单词",review:"间隔复习",shadow:"语句跟读",reading:"短文阅读",call:"视频通话练习",methods:"学习方法",stats:"我的统计",ai:"通义千问 AI 助手",lex:"词库查询 · 全行业"};
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{showView(b.dataset.view);document.getElementById('sidebar').classList.remove('open');});
 document.getElementById('menuBtn').onclick=()=>document.getElementById('sidebar').classList.toggle('open');
-function showView(v){if(v!=='call'&&callStream)stopCall();document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));document.getElementById('v-'+v).classList.add('active');document.getElementById('pageTitle').textContent=titles[v];if(v==='home')renderHome();if(v==='review')renderReview();if(v==='shadow')renderShadow();if(v==='reading')renderReading();if(v==='stats')renderStats();if(v==='methods')renderMethods();if(v==='words')resetWordsView();if(v==='call')renderCall();if(v==='ai')renderAI();window.scrollTo(0,0);}
+function showView(v){if(v!=='call'&&callStream)stopCall();document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));document.getElementById('v-'+v).classList.add('active');document.getElementById('pageTitle').textContent=titles[v];if(v==='home')renderHome();if(v==='review')renderReview();if(v==='shadow')renderShadow();if(v==='reading')renderReading();if(v==='stats')renderStats();if(v==='methods')renderMethods();if(v==='words')resetWordsView();if(v==='call')renderCall();if(v==='ai')renderAI();if(v==='lex')renderLex();window.scrollTo(0,0);}
 function resetWordsView(){renderBankPick();document.getElementById('wordSetup').style.display='block';document.getElementById('wordSession').style.display='none';}
 
 /* ===================== 首页 ===================== */
@@ -993,6 +1052,109 @@ function renderStats(){
   box.innerHTML=days.map((d,i)=>{const dt=d.key.slice(5);return `<div title="${d.key}" style="width:38px;height:46px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;${d.has?'background:var(--green);color:#fff':'background:var(--bg);color:var(--sub);border:1px solid var(--line)'}">${dt}<span style="font-size:14px;margin-top:2px">${d.has?'🔥':'·'}</span></div>`;}).join('');
 }
 document.getElementById('resetBtn').onclick=()=>{if(confirm('确定清空所有学习数据？此操作不可撤销。')){localStorage.removeItem(KEY);state=defaults();save();toast('已重置');renderStats();renderHome();}};
+
+/* ===================== 词库查询（Lex Query）===================== */
+let lexBank='all';
+function getLexWords(){
+  if(lexBank==='all') return allWords();
+  if(lexBank==='custom') return state.customWords||[];
+  return BANKS[lexBank]||[];
+}
+function lexStatus(word){
+  const rec=state.words[word];
+  if(!rec) return 'new';
+  if(rec.mastered) return 'mastered';
+  return 'learning';
+}
+function renderLex(){
+  const tabs=document.getElementById('lexTabs');
+  const list=[
+    {id:'all',label:'🌐 全部',n:allWords().length},
+    {id:'academic',label:'📘 学术',n:BANKS.academic.length},
+    {id:'kitchen',label:'🍳 厨房家电',n:BANKS.kitchen.length},
+    {id:'career',label:'💼 职场',n:BANKS.career.length},
+    {id:'medical',label:'🏥 医疗',n:BANKS.medical.length},
+    {id:'custom',label:'⭐ 我的词库',n:(state.customWords||[]).length}
+  ];
+  tabs.innerHTML=list.map(t=>`<button data-id="${t.id}" class="${t.id===lexBank?'active':''}">${t.label}<small>${t.n}</small></button>`).join('');
+  tabs.querySelectorAll('button').forEach(b=>b.onclick=()=>{lexBank=b.dataset.id;renderLex();});
+  renderLexList();
+}
+function renderLexList(){
+  const q=(document.getElementById('lexQ').value||'').toLowerCase().trim();
+  const f=document.getElementById('lexFilter').value;
+  const all=getLexWords();
+  let arr=all.filter(w=>{
+    if(f!=='all'&&lexStatus(w.w)!==f) return false;
+    if(!q) return true;
+    return (w.w+' '+w.cn+' '+w.ex+' '+w.col).toLowerCase().includes(q);
+  });
+  document.getElementById('lexSummary').textContent=`共 ${all.length} 个 · 筛选后 ${arr.length} 个（${f==='all'?'全部':f==='new'?'未学':f==='learning'?'学习中':'已掌握'}${q?' · 关键词「'+q+'」':''}）`;
+  const list=document.getElementById('lexList');
+  if(arr.length===0){list.innerHTML='<div class="donemsg">没有匹配的单词</div>';return;}
+  list.innerHTML=arr.map((w,i)=>{
+    const st=lexStatus(w.w);
+    return `<div class="lex-item ${st==='mastered'?'mastered':''}" data-i="${i}">
+      <div class="lex-item-top">
+        <span class="w" onclick="speak('${w.w.replace(/'/g,"\\'")}')">${w.w}</span>
+        <span class="ipa">${w.ipa||''}</span>
+        <span class="pos">${w.pos||''}</span>
+        <span class="spacer"></span>
+        <span class="badge ${st}">${st==='new'?'未学':st==='learning'?'学习中':'已掌握'}</span>
+      </div>
+      <div class="lex-cn">${w.cn||''}</div>
+      <div class="lex-ex">${w.ex||''}</div>
+      <div class="lex-col">${w.col||''}</div>
+      <div class="lex-btns">
+        <button onclick="lexToggleMaster('${w.w}')">${st==='mastered'?'取消掌握':'标掌握'}</button>
+        ${lexBank==='custom'?'<button class="del" onclick="lexDelWord(\''+w.w+'\')">删除</button>':''}
+      </div>
+    </div>`;
+  }).join('');
+}
+window.lexToggleMaster=(w)=>{
+  const cur=state.words[w]||{stage:0,due:0,right:0,wrong:0,history:[]};
+  cur.mastered=!cur.mastered;
+  state.words[w]=cur;save();
+  renderLexList();renderStats();renderHome();
+};
+window.lexDelWord=(w)=>{
+  if(lexBank!=='custom')return;
+  if(!confirm('确定从「我的词库」删除「'+w+'」？'))return;
+  state.customWords=(state.customWords||[]).filter(x=>x.w!==w);
+  delete state.words[w];save();
+  renderLex();renderHome();
+};
+document.getElementById('lexQ').oninput=renderLexList;
+document.getElementById('lexFilter').onchange=renderLexList;
+document.getElementById('lexMarkAll').onclick=()=>{
+  const arr=getLexWords().filter(w=>{
+    const f=document.getElementById('lexFilter').value;const q=(document.getElementById('lexQ').value||'').toLowerCase().trim();
+    if(f!=='all'&&lexStatus(w.w)!==f)return false;
+    if(q&&!(w.w+' '+w.cn+' '+w.ex+' '+w.col).toLowerCase().includes(q))return false;
+    return true;
+  });
+  arr.forEach(w=>{const c=state.words[w.w]||{stage:0,due:0,right:0,wrong:0,history:[]};c.mastered=true;state.words[w.w]=c;});
+  save();renderLexList();renderStats();renderHome();toast('已标掌握 '+arr.length+' 个');
+};
+document.getElementById('lexUnmarkAll').onclick=()=>{
+  const arr=getLexWords().filter(w=>{
+    const f=document.getElementById('lexFilter').value;const q=(document.getElementById('lexQ').value||'').toLowerCase().trim();
+    if(f!=='all'&&lexStatus(w.w)!==f)return false;
+    if(q&&!(w.w+' '+w.cn+' '+w.ex+' '+w.col).toLowerCase().includes(q))return false;
+    return true;
+  });
+  arr.forEach(w=>{if(state.words[w.w])state.words[w.w].mastered=false;});
+  save();renderLexList();renderStats();renderHome();toast('已取消 '+arr.length+' 个');
+};
+document.getElementById('lexExportBtn').onclick=()=>{
+  const arr=getLexWords();
+  const lines=['word,ipa,pos,cn,example,collocation,status'];
+  arr.forEach(w=>{const st=lexStatus(w.w);lines.push([w.w,w.ipa,w.pos,w.cn,(w.ex||'').replace(/"/g,'""'),(w.col||'').replace(/"/g,'""'),st].map(x=>'"'+(x||'')+'"').join(','));});
+  const blob=new Blob(["\uFEFF"+lines.join('\n')],{text:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ielts-vocab-'+lexBank+'.csv';a.click();
+  toast('已导出 CSV');
+};
 
 /* ===================== 发音口音 ===================== */
 document.getElementById('accUk').onclick=()=>setAcc('uk');
