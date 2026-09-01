@@ -1206,9 +1206,21 @@ function expandBank(bank,n){
     const before=target.length;
     arr.forEach(w=>{if(!w||!w.w)return;w.w=(w.w+'').toLowerCase().trim();if(!w.w||exclude.has(w.w))return;target.push(w);exclude.add(w.w);});
     const added=target.length-before;
+    // 持久化：把新增词也复制到 customWords，保证刷新后不丢失
+    if(bank!=='custom'&&added>0){
+      if(!state.customWords)state.customWords=[];
+      const cusEx=new Set(state.customWords.map(x=>x.w.toLowerCase()));
+      let mirrored=0;
+      for(let i=before;i<target.length;i++){
+        if(!cusEx.has(target[i].w)){state.customWords.push(target[i]);cusEx.add(target[i].w);mirrored++;}
+      }
+      if(mirrored>0)toast('✅ 已扩充 '+added+' 词（已同步 '+mirrored+' 词到「我的词库」持久保存，刷新不丢）');
+      else toast('✅ 已扩充 '+added+' 词');
+    }else{
+      toast('✅ 已扩充 '+added+' 词（请求 '+arr.length+'，去重后入库 '+added+'）');
+    }
     save();
     if(btn)setBusy(btn,false,oldLabel);
-    toast('✅ 已扩充 '+added+' 词（请求 '+arr.length+'，去重后入库 '+added+'）');
     renderLex();renderHome();renderStats();
   },err=>{if(btn)setBusy(btn,false,oldLabel);toast('扩充失败：'+err);});
 }
@@ -1232,9 +1244,18 @@ function expandBankSmart(bank){
     const before=target.length;
     arr.forEach(w=>{if(!w||!w.w)return;w.w=(w.w+'').toLowerCase().trim();if(!w.w||exclude.has(w.w))return;target.push(w);exclude.add(w.w);});
     const added=target.length-before;
+    if(bank!=='custom'&&added>0){
+      if(!state.customWords)state.customWords=[];
+      const cusEx=new Set(state.customWords.map(x=>x.w.toLowerCase()));
+      let mirrored=0;
+      for(let i=before;i<target.length;i++){if(!cusEx.has(target[i].w)){state.customWords.push(target[i]);cusEx.add(target[i].w);mirrored++;}}
+      if(mirrored>0)toast('✅ 智能补盲 '+added+' 词（已同步 '+mirrored+' 词到「我的词库」持久保存）');
+      else toast('✅ 智能补盲 '+added+' 词');
+    }else{
+      toast('✅ 智能补盲 '+added+' 词');
+    }
     save();
     if(btn)setBusy(btn,false,'🎯 智能补盲');
-    toast('✅ 智能补盲入库 '+added+' 词');
     renderLex();renderHome();renderStats();
   },err=>{if(btn)setBusy(btn,false,'🎯 智能补盲');toast('失败：'+err);});
 }
