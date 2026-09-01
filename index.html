@@ -399,7 +399,13 @@
           </select>
           <button class="btn" id="saveQwen">保存</button>
         </div>
-        <div class="ai-hint">没有 Key？打开 <a href="https://dashscope.console.aliyun.com/" target="_blank" rel="noopener">阿里云百炼控制台</a> → 右上角「API Key 管理」→ 创建并复制。新用户有免费额度，日常学习绰绰有余。注意：浏览器直连需通过 <b>localhost 或 https</b> 打开本页（直接双击 file:// 打开时 TTS 可用，但 API 调用会被浏览器拦）；请用已启动的 <b>http://127.0.0.1:8080/index.html</b>。</div>
+        <div class="ai-keyrow" style="margin-top:8px">
+          <input id="qwenProxy" type="text" placeholder="代理 URL（可选）：如 https://你的代理.com （如遇网络拦截才需填）" />
+          <button class="btn ghost" id="testQwenBtn">🔌 测试连接</button>
+        </div>
+        <div class="ai-hint">没有 Key？打开 <a href="https://dashscope.console.aliyun.com/" target="_blank" rel="noopener">阿里云百炼控制台</a> → 右上角「API Key 管理」→ 创建并复制。新用户有免费额度，日常学习绰绰有余。<br>
+        <b>遇到 “网络错误：Failed to fetch” 怎么办？</b> 这通常是浏览器扩展（AdBlock、隐私保护、企业代理）拦截了请求，或某些网络环境对 dashscope.aliyuncs.com 的跨域有限制。<br>
+        1) 先点上方「🔌 测试连接」看返回的具体原因；2) 尝试在 <b>隐身/无痕窗口</b>打开本页（默认无扩展）；3) 若仍不通，可填一个 <b>CORS 代理</b> 到「代理 URL」（你的代理或自建反代，只把请求转发到 dashscope，返回时加 <code>Access-Control-Allow-Origin: *</code> 即可）。</div>
       </div>
     </div>
 
@@ -725,7 +731,7 @@ const METHODS = [
 const KEY="ielts_state_v1";
 let state=load();
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||defaults();}catch(e){return defaults();}}
-function defaults(){return{dailyGoal:20,accent:"uk",currentBank:"academic",customWords:[],words:{},dailyLog:{},lastDate:null,streak:0,activeDays:{},shadowCount:0,readIds:[],qwenKey:"",qwenModel:"qwen-plus",generatedPassages:[]};}
+function defaults(){return{dailyGoal:20,accent:"uk",currentBank:"academic",customWords:[],words:{},dailyLog:{},lastDate:null,streak:0,activeDays:{},shadowCount:0,readIds:[],qwenKey:"",qwenModel:"qwen-plus",qwenProxy:"",generatedPassages:[]};}
 function save(){localStorage.setItem(KEY,JSON.stringify(state));}
 function today(){return new Date().toISOString().slice(0,10);}
 function log(){const t=today();if(!state.dailyLog[t])state.dailyLog[t]={newWords:0,review:0,shadow:0,reading:[]};return state.dailyLog[t];}
@@ -1092,22 +1098,57 @@ const QWEN_URL="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completio
 function renderAI(){
   document.getElementById('qwenKey').value=state.qwenKey||'';
   document.getElementById('qwenModel').value=state.qwenModel||'qwen-plus';
+  document.getElementById('qwenProxy').value=state.qwenProxy||'';
 }
 function saveQwen(){
   state.qwenKey=document.getElementById('qwenKey').value.trim();
   state.qwenModel=document.getElementById('qwenModel').value;
-  save();toast(state.qwenKey?'已保存通义千问 API Key ✅':'已清除 Key');
+  state.qwenProxy=document.getElementById('qwenProxy').value.trim();
+  save();toast('已保存通义千问设置 ✅');
 }
 function qwenReady(){if(!state.qwenKey){toast('请先在上方填入通义千问 API Key');document.getElementById('qwenKey').focus();return false;}return true;}
-function callQwen(system,user,onOk,onErr){
+function getQwenUrl(){
+  const p=(state.qwenProxy||"").trim();
+  if(!p) return {url:QWEN_URL,via:"直连 dashscope.aliyuncs.com"};
+  if(/\/chat\/completions\/?$/.test(p)) return {url:p,via:"代理("+p+")"};
+  return {url:p.replace(/\/+$/,"")+"/compatible-mode/v1/chat/completions",via:"代理("+p+")"};
+}
+async function callQwen(system,user,onOk,onErr){
   const body={model:state.qwenModel,messages:[{role:"system",content:system},{role:"user",content:user}],temperature:0.8};
-  fetch(QWEN_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+state.qwenKey},body:JSON.stringify(body)})
-    .then(r=>r.json().then(j=>({ok:r.ok,j})))
-    .then(({ok,j})=>{
-      if(!ok||!j.choices||!j.choices[0]){onErr&&onErr((j.error&&j.error.message)||"请求失败（检查 Key 或模型名）");return;}
-      onOk(j.choices[0].message.content);
-    })
-    .catch(e=>{onErr&&onErr("网络错误："+e.message);});
+  const {url,via}=getQwenUrl();
+  const tryOnce=async()=>{
+    const ctl=new AbortController();const t=setTimeout(()=>ctl.abort(),60000);
+    try{
+      const r=await fetch(url,{method:"POST",mode:"cors",signal:ctl.signal,headers:{"Content-Type":"application/json","Authorization":"Bearer "+state.qwenKey},body:JSON.stringify(body)});
+      clearTimeout(t);
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok||!j.choices||!j.choices[0]){
+        const msg=(j.error&&(j.error.message||j.error.code))||("HTTP "+r.status);
+        return {ok:false,err:msg,via,status:r.status};
+      }
+      return {ok:true,text:j.choices[0].message.content,via};
+    }catch(e){
+      clearTimeout(t);
+      const name=e.name||"";const m=e.message||String(e);
+      let hint="";
+      if(/AbortError/.test(name)) hint="（请求超时，60 秒无响应）";
+      else if(/TypeError|Failed to fetch|NetworkError/.test(m)) hint="（可能是：浏览器扩展拦截 / CORS 被拦 / 网络中断）";
+      return {ok:false,err:m+hint,via};
+    }
+  };
+  // 一次失败自动重试一次（应对偶发网络抖）
+  let res=await tryOnce();
+  if(!res.ok) res=await tryOnce();
+  if(!res.ok){onErr&&onErr("[via "+res.via+"] "+res.err+(res.status?" (HTTP "+res.status+")":""));return;}
+  onOk(res.text);
+}
+async function testQwen(){
+  if(!qwenReady())return;
+  const btn=document.getElementById('testQwenBtn');btn.dataset.label=btn.textContent;setBusy(btn,true,'测试中…');
+  const sys='回复一个字：OK';const r=await new Promise(res=>callQwen(sys,'ping',txt=>res({ok:true,txt}),err=>res({ok:false,err})));
+  setBusy(btn,false);
+  if(r.ok) toast('连接正常 ✅ 模型返回：'+r.txt.slice(0,40));
+  else toast('失败：'+r.err);
 }
 function aiBubble(role,text){
   const box=document.getElementById('aiChat');
@@ -1172,6 +1213,7 @@ document.getElementById('genSpeakBtn').onclick=()=>{
   },err=>{aiBubble('bot','⚠️ '+err);setBusy(btn,false);});
 };
 document.getElementById('saveQwen').onclick=saveQwen;
+document.getElementById('testQwenBtn').onclick=testQwen;
 document.getElementById('aiSend').onclick=aiSend;
 document.getElementById('aiInput').addEventListener('keydown',e=>{if(e.key==='Enter')aiSend();});
 
