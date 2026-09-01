@@ -117,6 +117,14 @@
   .pcard .cat{font-size:11.5px;color:#fff;background:var(--brand);padding:3px 10px;border-radius:8px;display:inline-block;margin-bottom:10px}
   .pcard h3{font-size:16.5px;margin-bottom:8px}
   .pcard p{font-size:13.5px;color:var(--sub);line-height:1.6}
+  .pcard{position:relative}
+  .ai-badge{display:inline-block;background:#ffe4e6;color:#be185d;padding:2px 8px;border-radius:6px;font-size:11px;margin-right:4px;margin-bottom:4px;font-weight:600}
+  .ai-badge.today{background:linear-gradient(135deg,#fef3c7,#fde68a);color:#92400e}
+  .read-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0 18px;padding:12px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  .read-toolbar input[type=text]{flex:1;min-width:180px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:14px}
+  .read-toolbar input[type=number]{width:60px;padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:14px}
+  .read-toolbar .autoswitch{font-size:13.5px;color:var(--ink);display:inline-flex;align-items:center;gap:6px;padding:0 8px}
+  .rec-status{font-size:12px;color:var(--sub);margin-left:auto}
   .reader{display:none}
   .reader .text{font-size:16px;line-height:1.95;color:#2a3340;background:var(--bg);border-radius:14px;padding:20px 22px;margin:14px 0}
   .reader .text .word-hl{cursor:pointer;border-bottom:1px dotted var(--brand)}
@@ -340,6 +348,13 @@
     <div class="card">
       <h2>📖 短文阅读（可理解输入）</h2>
       <div class="desc">选取略高于当前水平的雅思话题短文，听全文或点词发音，读完做理解题检验理解。</div>
+      <div class="read-toolbar">
+        <input type="text" id="recTopic" placeholder="主题（如：人工智能对就业的影响）" />
+        <input type="number" id="recCount" min="1" max="10" value="3" />
+        <button class="btn" id="recBatchBtn">🤖 AI 批量生成</button>
+        <label class="autoswitch"><input type="checkbox" id="autoDailyRec" /> 每日自动推荐</label>
+        <span class="rec-status" id="recStatus"></span>
+      </div>
       <div class="pgrid" id="pgrid"></div>
       <div class="reader" id="reader">
         <button class="btn ghost sm" id="backRead">← 返回列表</button>
@@ -790,7 +805,7 @@ const METHODS = [
 const KEY="ielts_state_v1";
 let state=load();
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||defaults();}catch(e){return defaults();}}
-function defaults(){return{dailyGoal:20,accent:"uk",currentBank:"academic",customWords:[],words:{},dailyLog:{},lastDate:null,streak:0,activeDays:{},shadowCount:0,readIds:[],qwenKey:"",qwenModel:"qwen-plus",qwenProxy:"",generatedPassages:[]};}
+function defaults(){return{dailyGoal:20,accent:"uk",currentBank:"academic",customWords:[],words:{},dailyLog:{},lastDate:null,streak:0,activeDays:{},shadowCount:0,readIds:[],qwenKey:"",qwenModel:"qwen-plus",qwenProxy:"",generatedPassages:[],autoDailyRec:false,lastRecDate:null,dailyRecCount:0};}
 function save(){localStorage.setItem(KEY,JSON.stringify(state));}
 function today(){return new Date().toISOString().slice(0,10);}
 function log(){const t=today();if(!state.dailyLog[t])state.dailyLog[t]={newWords:0,review:0,shadow:0,reading:[]};return state.dailyLog[t];}
@@ -811,7 +826,7 @@ function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor
 const titles={home:"今日学习计划",words:"每日单词",review:"间隔复习",shadow:"语句跟读",reading:"短文阅读",call:"视频通话练习",methods:"学习方法",stats:"我的统计",ai:"通义千问 AI 助手",lex:"词库查询 · 全行业"};
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{showView(b.dataset.view);document.getElementById('sidebar').classList.remove('open');});
 document.getElementById('menuBtn').onclick=()=>document.getElementById('sidebar').classList.toggle('open');
-function showView(v){if(v!=='call'&&callStream)stopCall();document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));document.getElementById('v-'+v).classList.add('active');document.getElementById('pageTitle').textContent=titles[v];if(v==='home')renderHome();if(v==='review')renderReview();if(v==='shadow')renderShadow();if(v==='reading')renderReading();if(v==='stats')renderStats();if(v==='methods')renderMethods();if(v==='words')resetWordsView();if(v==='call')renderCall();if(v==='ai')renderAI();if(v==='lex')renderLex();window.scrollTo(0,0);}
+function showView(v){if(v!=='call'&&callStream)stopCall();document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));document.getElementById('v-'+v).classList.add('active');document.getElementById('pageTitle').textContent=titles[v];if(v==='home')renderHome();if(v==='review')renderReview();if(v==='shadow')renderShadow();if(v==='reading'){renderReading();tryDailyRecommend();}if(v==='stats')renderStats();if(v==='methods')renderMethods();if(v==='words')resetWordsView();if(v==='call')renderCall();if(v==='ai')renderAI();if(v==='lex')renderLex();window.scrollTo(0,0);}
 function resetWordsView(){renderBankPick();document.getElementById('wordSetup').style.display='block';document.getElementById('wordSession').style.display='none';}
 
 /* ===================== 首页 ===================== */
@@ -992,12 +1007,20 @@ function allPassages(){return (state.generatedPassages||[]).concat(PASSAGES);}
 function renderReading(){
   document.getElementById('pgrid').style.display='grid';
   document.getElementById('reader').style.display='none';
-  document.getElementById('pgrid').innerHTML=allPassages().map((p,i)=>`
-    <div class="pcard" onclick="openPassage(${i})">
+  document.getElementById('autoDailyRec').checked=!!state.autoDailyRec;
+  document.getElementById('recStatus').textContent='今日已推荐 '+state.dailyRecCount+' 篇';
+  const today=today();
+  document.getElementById('pgrid').innerHTML=allPassages().map((p,i)=>{
+    const isAi=!!p._ai;
+    const isToday=isAi && p._date===today;
+    const badges=(isToday?'<span class="ai-badge today">🤖 今日推荐</span>':'')+(isAi?'<span class="ai-badge">AI</span>':'');
+    return `<div class="pcard" onclick="openPassage(${i})">
       <span class="cat">${p.cat}</span>
+      ${badges}
       <h3>${p.title}</h3>
       <p>${p.text.slice(0,60)}…</p>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 let curPassage=-1;
 window.openPassage=(i)=>{
@@ -1333,6 +1356,59 @@ function parseJSON(txt){
   try{return JSON.parse(s.slice(s.indexOf('{'),s.lastIndexOf('}')+1));}catch(e){}
   return null;
 }
+function nowDate(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+
+function batchGenPassages(topic,n){
+  if(!qwenReady())return;
+  if(!topic){toast('请先填主题');return;}
+  n=Math.max(1,Math.min(10,n||3));
+  const btn=document.getElementById('recBatchBtn');
+  const oldLabel=btn.textContent;setBusy(btn,true,'生成中…');
+  const sys='你是雅思阅读材料专家。只返回一个 JSON 数组，不要任何解释或 Markdown。元素格式：{"cat":"话题分类（2~4字中文）","title":"中文标题","text":"150~220 词的英文短文（学术/科普风格，话题丰富）","quiz":[{"q":"英文问题","a":["A选项","B选项","C选项","D选项"],"correct":0~3}]}。quiz 每篇 2 道，理解题，确保 a 数组里只有 1 个正确选项并标注 correct 索引。';
+  const user='请生成 '+n+' 篇雅思风格的英语阅读短文，主题：「'+topic+'」。文章难度 IELTS 6~6.5，长度 150~220 词。';
+  callQwen(sys,user,txt=>{
+    const arr=parseJSON(txt);
+    if(!Array.isArray(arr)||!arr.length){toast('解析失败：'+txt.slice(0,80));setBusy(btn,false,oldLabel);return;}
+    const today=nowDate();
+    arr.forEach(p=>{p._ai=true;p._date=today;});
+    state.generatedPassages=(state.generatedPassages||[]).concat(arr);
+    save();
+    setBusy(btn,false,oldLabel);
+    toast('✅ 已入库 '+arr.length+' 篇');
+    renderReading();
+  },err=>{setBusy(btn,false,oldLabel);toast('生成失败：'+err);});
+}
+
+function tryDailyRecommend(){
+  if(!state.autoDailyRec)return;
+  if(!state.qwenKey)return;
+  const today=nowDate();
+  if(state.lastRecDate===today)return;
+  if(!state.generatedPassages)state.generatedPassages=[];
+  const todayCount=state.generatedPassages.filter(p=>p._date===today).length;
+  if(todayCount>=2)return;
+  const need=2-todayCount;
+  const topics=['教育与学习','科技与生活','环境与可持续发展','健康与心理','社会与文化','职场与个人成长','城市规划与生活方式'];
+  const seed=topics[Math.floor(Math.random()*topics.length)];
+  setBusy(document.getElementById('recBatchBtn'),true,'⏳ 每日推荐生成中…');
+  const sys='你是雅思阅读材料专家。只返回一个 JSON 数组，不要任何解释或 Markdown。元素格式：{"cat":"话题分类","title":"中文标题","text":"150~220 词的英文短文","quiz":[{"q":"英文问题","a":["A选项","B选项","C选项","D选项"],"correct":0~3}]}。quiz 2 道，确保只有 1 个正确选项并标注 correct 索引。';
+  const user='请生成 '+need+' 篇雅思风格的英语短文，话题围绕「'+seed+'」（每天主题随机）。难度 IELTS 6~6.5。';
+  callQwen(sys,user,txt=>{
+    const arr=parseJSON(txt);
+    if(Array.isArray(arr)&&arr.length){
+      arr.forEach(p=>{p._ai=true;p._date=today;});
+      state.generatedPassages=state.generatedPassages.concat(arr);
+      state.dailyRecCount=todayCount+arr.length;
+    }
+    state.lastRecDate=today;
+    save();
+    setBusy(document.getElementById('recBatchBtn'),false,'🤖 AI 批量生成');
+    renderReading();
+  },err=>{
+    state.lastRecDate=today;save();
+    setBusy(document.getElementById('recBatchBtn'),false,'🤖 AI 批量生成');
+  });
+}
 document.getElementById('genWordsBtn').onclick=()=>{
   if(!qwenReady())return;
   const ind=document.getElementById('genIndustry').value.trim();if(!ind){toast('请填写行业，如：厨房家电');return;}
@@ -1382,6 +1458,8 @@ document.getElementById('aiInput').addEventListener('keydown',e=>{if(e.key==='En
 /* ===================== 启动 ===================== */
 document.getElementById('accUk').classList.toggle('on',state.accent!=='us');
 document.getElementById('accUs').classList.toggle('on',state.accent==='us');
+document.getElementById('recBatchBtn').onclick=()=>{const t=document.getElementById('recTopic').value.trim();const n=+document.getElementById('recCount').value||3;batchGenPassages(t,n);};
+document.getElementById('autoDailyRec').onchange=(e)=>{state.autoDailyRec=!!e.target.checked;state.lastRecDate=null;state.dailyRecCount=0;save();if(state.autoDailyRec){toast('已开启每日自动推荐（每天自动生成 2 篇）');tryDailyRecommend();}else toast('已关闭每日自动推荐');};
 initStreak();
 renderHome();
 document.getElementById('streakTop').textContent=state.streak||0;
